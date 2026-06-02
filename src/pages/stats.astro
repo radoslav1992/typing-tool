@@ -1,0 +1,215 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="Your stats — Typing Tool">
+  <section class="container">
+    <header class="head">
+      <span class="tag">Progress</span>
+      <h1>Your typing stats</h1>
+      <p class="lede">Every session you finish is saved here, on this device. Watch the trend climb.</p>
+    </header>
+
+    <!-- Empty state -->
+    <div id="empty" class="card empty" hidden>
+      <div class="empty-icon" aria-hidden="true">📈</div>
+      <h2>No sessions yet</h2>
+      <p>Finish a typing session and your speed, accuracy and history will show up here.</p>
+      <a class="btn btn-primary" href="/library">Start typing →</a>
+    </div>
+
+    <div id="dashboard" hidden>
+      <!-- Summary cards -->
+      <div class="summary">
+        <div class="card metric">
+          <span class="metric-val" id="m-best">0</span>
+          <span class="metric-label">Best WPM</span>
+        </div>
+        <div class="card metric">
+          <span class="metric-val" id="m-avg">0</span>
+          <span class="metric-label">Average WPM</span>
+        </div>
+        <div class="card metric">
+          <span class="metric-val" id="m-acc">0%</span>
+          <span class="metric-label">Average accuracy</span>
+        </div>
+        <div class="card metric">
+          <span class="metric-val" id="m-sessions">0</span>
+          <span class="metric-label">Sessions</span>
+        </div>
+        <div class="card metric">
+          <span class="metric-val" id="m-time">0m</span>
+          <span class="metric-label">Time practiced</span>
+        </div>
+        <div class="card metric">
+          <span class="metric-val" id="m-chars">0</span>
+          <span class="metric-label">Characters typed</span>
+        </div>
+      </div>
+
+      <!-- WPM trend -->
+      <div class="card chart-card">
+        <div class="chart-head">
+          <h2>WPM over your last sessions</h2>
+          <span class="chart-legend"><i class="dot-wpm"></i> WPM</span>
+        </div>
+        <svg id="chart" viewBox="0 0 720 220" preserveAspectRatio="none" role="img" aria-label="WPM trend chart"></svg>
+      </div>
+
+      <!-- History -->
+      <div class="history-head">
+        <h2>History</h2>
+        <button id="clear-btn" class="btn btn-ghost mini">Clear all</button>
+      </div>
+      <div class="card table-wrap">
+        <table class="history">
+          <thead>
+            <tr><th>Date</th><th>Source</th><th>WPM</th><th>Accuracy</th><th>Errors</th><th>Time</th></tr>
+          </thead>
+          <tbody id="history-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .head { margin-bottom: 24px; }
+  .head h1 { font-size: clamp(1.8rem, 4vw, 2.4rem); margin-top: 12px; }
+  .lede { color: var(--text-soft); font-size: 1.05rem; }
+
+  .empty { text-align: center; padding: 56px 32px; }
+  .empty-icon { font-size: 2.6rem; }
+  .empty h2 { margin: 12px 0 6px; }
+  .empty p { color: var(--text-soft); max-width: 40ch; margin: 0 auto 22px; }
+
+  .summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 14px;
+    margin-bottom: 22px;
+  }
+  .metric { padding: 20px; display: flex; flex-direction: column; gap: 4px; }
+  .metric-val { font-size: 2rem; font-weight: 800; color: var(--accent-strong); line-height: 1; }
+  .metric-label { font-size: 0.82rem; color: var(--text-soft); }
+
+  .chart-card { padding: 22px; margin-bottom: 28px; }
+  .chart-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .chart-head h2 { font-size: 1.1rem; margin: 0; }
+  .chart-legend { font-size: 0.82rem; color: var(--text-soft); display: flex; align-items: center; gap: 6px; }
+  .dot-wpm { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); display: inline-block; }
+  #chart { width: 100%; height: 220px; display: block; }
+
+  .history-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .history-head h2 { font-size: 1.1rem; margin: 0; }
+  .mini { padding: 7px 14px; font-size: 0.85rem; }
+
+  .table-wrap { overflow-x: auto; padding: 4px 4px; }
+  table.history { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+  .history th, .history td { padding: 12px 16px; text-align: left; white-space: nowrap; }
+  .history th { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); }
+  .history tbody tr { border-top: 1px solid var(--border); }
+  .history td:nth-child(3) { font-weight: 700; color: var(--accent-strong); }
+</style>
+
+<script>
+  import { loadResults, aggregate, clearResults, type SessionResult } from '../scripts/stats.ts';
+
+  const $ = (id: string) => document.getElementById(id)!;
+
+  function fmtTime(sec: number) {
+    if (sec < 60) return `${sec}s`;
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return s ? `${m}m ${s}s` : `${m}m`;
+  }
+  function fmtDate(ts: number) {
+    return new Date(ts).toLocaleDateString(undefined, {
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+  }
+
+  function drawChart(results: SessionResult[]) {
+    const svg = $('chart');
+    const W = 720, H = 220, pad = 28;
+    // oldest -> newest, last 30
+    const data = results.slice(0, 30).reverse().map((r) => r.wpm);
+    if (data.length === 0) return;
+    const max = Math.max(...data, 10);
+    const min = 0;
+    const n = data.length;
+    const x = (i: number) => (n === 1 ? W / 2 : pad + (i * (W - pad * 2)) / (n - 1));
+    const y = (v: number) => H - pad - ((v - min) / (max - min)) * (H - pad * 2);
+
+    const linePts = data.map((v, i) => `${x(i)},${y(v)}`).join(' ');
+    const areaPts = `${x(0)},${H - pad} ${linePts} ${x(n - 1)},${H - pad}`;
+
+    let grid = '';
+    for (let g = 0; g <= 4; g++) {
+      const gy = pad + (g * (H - pad * 2)) / 4;
+      const val = Math.round(max - (g * (max - min)) / 4);
+      grid += `<line x1="${pad}" y1="${gy}" x2="${W - pad}" y2="${gy}" stroke="var(--border)" stroke-width="1"/>`;
+      grid += `<text x="4" y="${gy + 4}" font-size="11" fill="var(--text-faint)">${val}</text>`;
+    }
+    const dots = data
+      .map((v, i) => `<circle cx="${x(i)}" cy="${y(v)}" r="3.5" fill="var(--accent)"/>`)
+      .join('');
+
+    svg.innerHTML = `
+      ${grid}
+      <polygon points="${areaPts}" fill="var(--accent-soft)" opacity="0.6"/>
+      <polyline points="${linePts}" fill="none" stroke="var(--accent)" stroke-width="2.5"
+        stroke-linejoin="round" stroke-linecap="round"/>
+      ${dots}`;
+  }
+
+  function render() {
+    const results = loadResults();
+    if (results.length === 0) {
+      $('empty').hidden = false;
+      $('dashboard').hidden = true;
+      return;
+    }
+    $('empty').hidden = true;
+    $('dashboard').hidden = false;
+
+    const agg = aggregate(results);
+    $('m-best').textContent = String(agg.bestWpm);
+    $('m-avg').textContent = String(agg.avgWpm);
+    $('m-acc').textContent = `${agg.avgAccuracy}%`;
+    $('m-sessions').textContent = String(agg.sessions);
+    $('m-time').textContent = fmtTime(agg.totalSeconds);
+    $('m-chars').textContent = agg.totalChars.toLocaleString();
+
+    drawChart(results);
+
+    const body = $('history-body');
+    body.innerHTML = '';
+    results.slice(0, 100).forEach((r) => {
+      const tr = document.createElement('tr');
+      const cells = [
+        fmtDate(r.date),
+        r.source,
+        String(r.wpm),
+        `${r.accuracy}%`,
+        String(r.errors),
+        fmtTime(r.durationSec),
+      ];
+      cells.forEach((c) => {
+        const td = document.createElement('td');
+        td.textContent = c;
+        tr.appendChild(td);
+      });
+      body.appendChild(tr);
+    });
+  }
+
+  $('clear-btn').addEventListener('click', () => {
+    if (confirm('Clear all saved sessions? This cannot be undone.')) {
+      clearResults();
+      render();
+    }
+  });
+
+  render();
+</script>

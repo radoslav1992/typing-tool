@@ -1,0 +1,691 @@
+---
+import Base from '../layouts/Base.astro';
+import { KEYBOARD_ROWS } from '../scripts/keyboard.ts';
+
+const keyLabels: Record<string, string> = {
+  Backspace: '⌫',
+  Tab: 'tab',
+  Caps: 'caps',
+  Enter: '↵',
+  Shift: 'shift',
+  RShift: 'shift',
+  Space: '',
+};
+function keySize(key: string): string {
+  if (key === 'Space') return 'k-space';
+  if (key === 'Backspace' || key === 'Enter' || key === 'Caps' || key === 'RShift') return 'k-wide';
+  if (key === 'Shift') return 'k-xwide';
+  if (key === 'Tab' || key === '\\') return 'k-mid';
+  return '';
+}
+---
+
+<Base title="Practice — Typing Tool" wide={true}>
+  <section class="container practice" id="practice-root">
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <div class="source">
+        <span class="src-label">Now typing</span>
+        <h1 id="source-title">Loading…</h1>
+        <p id="source-meta" class="src-meta"></p>
+      </div>
+      <div class="toolbar-actions">
+        <div class="mode-switch" role="tablist" aria-label="Mode">
+          <button id="mode-type" class="mode-btn active" role="tab">⌨ Type</button>
+          <button id="mode-read" class="mode-btn" role="tab">📖 Read</button>
+        </div>
+        <button id="settings-btn" class="icon-btn" aria-label="Settings" title="Settings">⚙</button>
+        <button id="restart-btn" class="icon-btn" aria-label="Restart" title="Restart">↻</button>
+      </div>
+    </div>
+
+    <!-- Settings panel -->
+    <div id="settings-panel" class="settings card" hidden>
+      <div class="setting">
+        <label for="set-font">Font</label>
+        <select id="set-font">
+          <option value="var(--font-serif)">Serif</option>
+          <option value="var(--font-sans)">Sans</option>
+          <option value="var(--font-mono)" selected>Mono</option>
+        </select>
+      </div>
+      <div class="setting">
+        <label for="set-size">Size</label>
+        <input type="range" id="set-size" min="16" max="40" step="2" value="24" />
+      </div>
+      <div class="setting">
+        <label for="set-spacing">Line spacing</label>
+        <input type="range" id="set-spacing" min="150" max="280" step="10" value="210" />
+      </div>
+      <div class="setting toggle">
+        <label for="set-keyboard">On-screen keyboard</label>
+        <input type="checkbox" id="set-keyboard" checked />
+      </div>
+      <div class="setting toggle">
+        <label for="set-strict">Strict mode (block on error)</label>
+        <input type="checkbox" id="set-strict" />
+      </div>
+    </div>
+
+    <!-- Live stats -->
+    <div class="stats-bar" id="stats-bar">
+      <div class="stat"><span id="st-wpm">0</span><small>wpm</small></div>
+      <div class="stat"><span id="st-acc">100%</span><small>accuracy</small></div>
+      <div class="stat"><span id="st-time">0:00</span><small>time</small></div>
+      <div class="stat"><span id="st-err">0</span><small>errors</small></div>
+      <div class="progress" aria-hidden="true"><div class="progress-fill" id="progress-fill"></div></div>
+    </div>
+
+    <!-- Typing surface -->
+    <div id="type-view">
+      <div
+        id="text-area"
+        class="card text-area"
+        tabindex="0"
+        role="textbox"
+        aria-label="Typing area — start typing to begin"
+      >
+        <div id="text-render" class="text-render"></div>
+        <div id="focus-hint" class="focus-hint">Click here and start typing</div>
+      </div>
+
+      <!-- On-screen keyboard -->
+      <div id="keyboard" class="keyboard card">
+        {
+          KEYBOARD_ROWS.map((row) => (
+            <div class="kb-row">
+              {row.map((key) => (
+                <div
+                  class:list={['key', keySize(key), { 'key-mod': keyLabels[key] !== undefined && key !== 'Space' }]}
+                  data-key={key.toLowerCase()}
+                >
+                  {keyLabels[key] !== undefined ? keyLabels[key] : key}
+                </div>
+              ))}
+            </div>
+          ))
+        }
+      </div>
+    </div>
+
+    <!-- Reading view -->
+    <div id="read-view" class="card read-view" hidden>
+      <div id="read-render" class="read-render"></div>
+    </div>
+
+    <!-- Results overlay -->
+    <div id="results" class="results-overlay" hidden>
+      <div class="results card">
+        <span class="tag">Session complete</span>
+        <h2>Nicely done.</h2>
+        <div class="results-grid">
+          <div class="result-stat big"><span id="r-wpm">0</span><small>words / min</small></div>
+          <div class="result-stat"><span id="r-acc">0%</span><small>accuracy</small></div>
+          <div class="result-stat"><span id="r-time">0:00</span><small>time</small></div>
+          <div class="result-stat"><span id="r-raw">0</span><small>raw wpm</small></div>
+          <div class="result-stat"><span id="r-err">0</span><small>errors</small></div>
+          <div class="result-stat"><span id="r-chars">0</span><small>characters</small></div>
+        </div>
+        <p id="r-note" class="r-note"></p>
+        <div class="results-actions">
+          <button class="btn btn-primary" id="r-again">Type it again</button>
+          <a class="btn btn-ghost" href="/library">Pick another</a>
+          <a class="btn btn-ghost" href="/stats">View stats</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .practice { max-width: 960px; }
+  .toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+  }
+  .src-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-faint);
+    font-weight: 700;
+  }
+  .source h1 { font-size: 1.5rem; margin: 2px 0 0; }
+  .src-meta { color: var(--text-soft); font-size: 0.9rem; margin: 2px 0 0; }
+  .toolbar-actions { display: flex; align-items: center; gap: 8px; }
+  .mode-switch {
+    display: flex;
+    background: var(--surface-2);
+    border-radius: 999px;
+    padding: 3px;
+  }
+  .mode-btn {
+    border: 0;
+    background: transparent;
+    padding: 7px 14px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 0.88rem;
+    color: var(--text-soft);
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .mode-btn.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+  .icon-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 1.1rem;
+    cursor: pointer;
+  }
+  .icon-btn:hover { background: var(--surface-2); }
+
+  .settings {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px 24px;
+    padding: 18px 22px;
+    margin-bottom: 18px;
+  }
+  .setting { display: flex; flex-direction: column; gap: 6px; }
+  .setting label { font-size: 0.85rem; font-weight: 600; color: var(--text-soft); }
+  .setting select, .setting input[type='range'] { width: 100%; font-family: inherit; }
+  .setting select {
+    padding: 7px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+  }
+  .setting.toggle {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .setting.toggle input { width: 18px; height: 18px; }
+
+  .stats-bar {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    padding: 14px 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+    box-shadow: var(--shadow);
+  }
+  .stat { display: flex; flex-direction: column; line-height: 1.1; }
+  .stat span { font-size: 1.4rem; font-weight: 800; color: var(--accent-strong); }
+  .stat small { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); }
+  .progress {
+    flex: 1;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    overflow: hidden;
+    min-width: 80px;
+  }
+  .progress-fill { height: 100%; width: 0%; background: var(--accent); transition: width 0.15s ease; }
+
+  .text-area {
+    position: relative;
+    padding: 36px 40px;
+    cursor: text;
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+  .text-area:focus, .text-area.active { border-color: var(--accent); }
+  .text-render {
+    font-family: var(--font-mono);
+    font-size: 24px;
+    line-height: 2.1;
+    letter-spacing: 0.01em;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .focus-hint {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: color-mix(in srgb, var(--surface) 70%, transparent);
+    backdrop-filter: blur(1px);
+    color: var(--text-soft);
+    font-weight: 600;
+    border-radius: var(--radius);
+    cursor: pointer;
+  }
+  .text-area.active .focus-hint { display: none; }
+
+  /* per-character states */
+  :global(.ch) { border-radius: 2px; }
+  :global(.ch-correct) { color: var(--correct); }
+  :global(.ch-incorrect) { color: var(--error); background: var(--error-soft); }
+  :global(.ch-incorrect.is-space) { background: var(--error); }
+  :global(.ch-pending) { color: var(--text-faint); }
+  :global(.ch-current) {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 0 0 2px var(--accent);
+  }
+  :global(.ch-current.is-space) { background: var(--accent-soft); box-shadow: 0 0 0 2px var(--accent); }
+
+  .keyboard {
+    margin-top: 16px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    user-select: none;
+  }
+  .kb-row { display: flex; gap: 7px; justify-content: center; }
+  .key {
+    min-width: 42px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border-radius: 9px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-bottom-width: 3px;
+    font-family: var(--font-mono);
+    font-size: 0.95rem;
+    color: var(--text-soft);
+    transition: background 0.08s ease, color 0.08s ease, transform 0.05s ease;
+  }
+  .key-mod { font-size: 0.78rem; font-family: var(--font-sans); }
+  .k-mid { min-width: 60px; }
+  .k-wide { min-width: 74px; }
+  .k-xwide { min-width: 92px; }
+  .k-space { min-width: 320px; }
+  .key.next {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent-strong);
+    transform: translateY(1px);
+  }
+  .key.next-shift {
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+    border-color: var(--accent);
+  }
+  .key.pressed { transform: translateY(2px); border-bottom-width: 1px; }
+
+  .read-view { padding: 40px 48px; }
+  .read-render {
+    font-family: var(--font-serif);
+    font-size: 22px;
+    line-height: 1.9;
+    max-width: 65ch;
+    margin: 0 auto;
+    white-space: pre-wrap;
+  }
+
+  .results-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background: color-mix(in srgb, var(--bg) 70%, transparent);
+    backdrop-filter: blur(6px);
+  }
+  .results {
+    width: 100%;
+    max-width: 520px;
+    padding: 32px;
+    text-align: center;
+  }
+  .results h2 { font-size: 1.8rem; margin: 10px 0 22px; }
+  .results-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+  .result-stat {
+    background: var(--surface-2);
+    border-radius: var(--radius-sm);
+    padding: 16px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .result-stat span { font-size: 1.5rem; font-weight: 800; color: var(--text); }
+  .result-stat.big span { font-size: 2.2rem; color: var(--accent-strong); }
+  .result-stat small { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); }
+  .r-note { color: var(--text-soft); margin: 0 0 22px; min-height: 1.2em; }
+  .results-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+  @media (max-width: 720px) {
+    .keyboard { display: none; }
+    .text-render { font-size: 20px !important; }
+    .stats-bar { gap: 16px; padding: 12px 14px; }
+    .stat span { font-size: 1.2rem; }
+    .results-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+
+<script>
+  import { TypingEngine, type LiveStats } from '../scripts/typing-engine.ts';
+  import { keyForChar } from '../scripts/keyboard.ts';
+  import { getPassage } from '../data/books.ts';
+  import { saveResult, getCustomText } from '../scripts/stats.ts';
+
+  // --- Resolve the source text from the URL ---------------------------------
+  const params = new URLSearchParams(location.search);
+  const bookId = params.get('book');
+  const customId = params.get('custom');
+  const initialMode = params.get('mode') === 'read' ? 'read' : 'type';
+
+  let sourceTitle = 'Quick practice';
+  let sourceMeta = '';
+  let text =
+    'The quick brown fox jumps over the lazy dog. Pack my box with five dozen liquor jugs. ' +
+    'How vexingly quick daft zebras jump! The five boxing wizards jump quickly.';
+
+  if (bookId) {
+    const p = getPassage(bookId);
+    if (p) {
+      text = p.text;
+      sourceTitle = p.title;
+      sourceMeta = `${p.author} · ${p.year < 0 ? Math.abs(p.year) + ' BCE' : p.year} · ${p.genre}`;
+    }
+  } else if (customId) {
+    const c = getCustomText(customId);
+    if (c) {
+      text = c.text;
+      sourceTitle = c.title;
+      sourceMeta = 'Your uploaded text';
+    } else {
+      sourceTitle = 'Text not found';
+      sourceMeta = 'This custom text is no longer saved on this device.';
+    }
+  }
+
+  // --- DOM refs -------------------------------------------------------------
+  const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+  $('source-title').textContent = sourceTitle;
+  $('source-meta').textContent = sourceMeta;
+  $('read-render').textContent = text;
+
+  const textArea = $('text-area');
+  const textRender = $('text-render');
+  const stWpm = $('st-wpm');
+  const stAcc = $('st-acc');
+  const stTime = $('st-time');
+  const stErr = $('st-err');
+  const progressFill = $('progress-fill');
+
+  function fmtTime(sec: number): string {
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
+  // --- Build character spans ------------------------------------------------
+  let charEls: HTMLSpanElement[] = [];
+  function buildText() {
+    textRender.innerHTML = '';
+    charEls = [];
+    for (const ch of engine.target) {
+      const span = document.createElement('span');
+      span.className = 'ch ch-pending';
+      if (ch === ' ') span.classList.add('is-space');
+      span.textContent = ch === '\n' ? '↵\n' : ch;
+      textRender.appendChild(span);
+      charEls.push(span);
+    }
+  }
+
+  const STATE_CLASS: Record<string, string> = {
+    pending: 'ch-pending',
+    correct: 'ch-correct',
+    incorrect: 'ch-incorrect',
+    current: 'ch-current',
+  };
+  function renderStates() {
+    const states = engine.states();
+    for (let i = 0; i < charEls.length; i++) {
+      const base = charEls[i].classList.contains('is-space') ? 'ch is-space ' : 'ch ';
+      charEls[i].className = base + STATE_CLASS[states[i]];
+    }
+    // keep the caret in view
+    const cur = charEls[engine.position];
+    if (cur) cur.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    highlightNextKey();
+  }
+
+  // --- On-screen keyboard ---------------------------------------------------
+  const keyboard = $('keyboard');
+  function clearKeyHighlights() {
+    keyboard.querySelectorAll('.key.next, .key.next-shift').forEach((el) => {
+      el.classList.remove('next', 'next-shift');
+    });
+  }
+  function highlightNextKey() {
+    clearKeyHighlights();
+    const next = engine.nextChar();
+    if (next == null) return;
+    const target = keyForChar(next);
+    if (!target) return;
+    const keyEl = keyboard.querySelector(`.key[data-key="${cssEscape(target.key.toLowerCase())}"]`);
+    keyEl?.classList.add('next');
+    if (target.shift) {
+      keyboard.querySelectorAll('.key[data-key="shift"]').forEach((el) => el.classList.add('next-shift'));
+    }
+  }
+  function cssEscape(s: string): string {
+    return s.replace(/["\\]/g, '\\$&');
+  }
+  function flashKey(key: string) {
+    const el = keyboard.querySelector(`.key[data-key="${cssEscape(key.toLowerCase())}"]`);
+    if (!el) return;
+    el.classList.add('pressed');
+    setTimeout(() => el.classList.remove('pressed'), 90);
+  }
+
+  // --- Engine ---------------------------------------------------------------
+  let strict = false;
+  let timer: number | undefined;
+
+  function onUpdate(s: LiveStats) {
+    stWpm.textContent = String(s.wpm);
+    stAcc.textContent = `${s.accuracy}%`;
+    stErr.textContent = String(s.errors);
+    stTime.textContent = fmtTime(s.elapsed);
+    progressFill.style.width = `${Math.round(s.progress * 100)}%`;
+    renderStates();
+  }
+
+  function onComplete(s: LiveStats) {
+    stopTimer();
+    saveResult({
+      source: sourceTitle,
+      wpm: s.wpm,
+      rawWpm: s.rawWpm,
+      accuracy: s.accuracy,
+      chars: engine.target.length,
+      errors: s.errors,
+      durationSec: Math.round(s.elapsed),
+    });
+    showResults(s);
+  }
+
+  let engine = new TypingEngine(text, { onUpdate, onComplete, strict });
+
+  function startTimer() {
+    stopTimer();
+    timer = window.setInterval(() => {
+      if (!engine.isFinished) {
+        const s = engine.computeStats();
+        stWpm.textContent = String(s.wpm);
+        stTime.textContent = fmtTime(s.elapsed);
+      }
+    }, 250);
+  }
+  function stopTimer() {
+    if (timer) window.clearInterval(timer);
+    timer = undefined;
+  }
+
+  // --- Input capture --------------------------------------------------------
+  let active = false;
+  function activate() {
+    active = true;
+    textArea.classList.add('active');
+    textArea.focus();
+  }
+  textArea.addEventListener('focus', () => textArea.classList.add('active'));
+  textArea.addEventListener('blur', () => textArea.classList.remove('active'));
+  textArea.addEventListener('mousedown', activate);
+
+  textArea.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (engine.isFinished) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+    if (e.key === 'Backspace') {
+      e.preventDefault();
+      engine.handleBackspace();
+      flashKey('backspace');
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (engine.nextChar() === '\n') engine.handleChar('\n');
+      flashKey('enter');
+      return;
+    }
+    if (e.key === 'Tab') {
+      // allow tabbing away; only intercept if the text needs a tab
+      if (engine.nextChar() === '\t') {
+        e.preventDefault();
+        engine.handleChar('\t');
+      }
+      return;
+    }
+    if (e.key.length === 1) {
+      e.preventDefault();
+      if (engine.position === 0 && !timer) startTimer();
+      engine.handleChar(e.key);
+      flashKey(keyForChar(e.key)?.key ?? e.key);
+    }
+  });
+
+  // --- Mode switching -------------------------------------------------------
+  const typeView = $('type-view');
+  const readView = $('read-view');
+  const modeType = $('mode-type');
+  const modeRead = $('mode-read');
+  function setMode(mode: 'type' | 'read') {
+    const reading = mode === 'read';
+    readView.hidden = !reading;
+    typeView.hidden = reading;
+    $('stats-bar').style.display = reading ? 'none' : '';
+    modeRead.classList.toggle('active', reading);
+    modeType.classList.toggle('active', !reading);
+    if (!reading) activate();
+  }
+  modeType.addEventListener('click', () => setMode('type'));
+  modeRead.addEventListener('click', () => setMode('read'));
+
+  // --- Restart --------------------------------------------------------------
+  function restart() {
+    stopTimer();
+    engine = new TypingEngine(text, { onUpdate, onComplete, strict });
+    buildText();
+    onUpdate(engine.computeStats());
+    $('results').hidden = true;
+    activate();
+  }
+  $('restart-btn').addEventListener('click', restart);
+  $('r-again').addEventListener('click', restart);
+
+  // --- Results --------------------------------------------------------------
+  function noteFor(s: LiveStats): string {
+    if (s.accuracy >= 99 && s.wpm >= 60) return 'Fast and clean — that was excellent.';
+    if (s.accuracy >= 98) return 'Great accuracy. Push the pace next time.';
+    if (s.accuracy < 92) return 'Slow down a touch and aim for cleaner keystrokes.';
+    return 'Solid run. Keep at it and your speed will climb.';
+  }
+  function showResults(s: LiveStats) {
+    $('r-wpm').textContent = String(s.wpm);
+    $('r-acc').textContent = `${s.accuracy}%`;
+    $('r-time').textContent = fmtTime(s.elapsed);
+    $('r-raw').textContent = String(s.rawWpm);
+    $('r-err').textContent = String(s.errors);
+    $('r-chars').textContent = String(engine.target.length);
+    $('r-note').textContent = noteFor(s);
+    $('results').hidden = false;
+  }
+
+  // --- Settings -------------------------------------------------------------
+  const settingsBtn = $('settings-btn');
+  const settingsPanel = $('settings-panel');
+  settingsBtn.addEventListener('click', () => {
+    settingsPanel.hidden = !settingsPanel.hidden;
+  });
+
+  const setFont = $<HTMLSelectElement>('set-font');
+  const setSize = $<HTMLInputElement>('set-size');
+  const setSpacing = $<HTMLInputElement>('set-spacing');
+  const setKeyboard = $<HTMLInputElement>('set-keyboard');
+  const setStrict = $<HTMLInputElement>('set-strict');
+
+  // load saved prefs
+  type Prefs = { font: string; size: string; spacing: string; keyboard: boolean; strict: boolean };
+  function loadPrefs() {
+    try {
+      const raw = localStorage.getItem('tt-prefs');
+      if (!raw) return;
+      const p: Partial<Prefs> = JSON.parse(raw);
+      if (p.font) setFont.value = p.font;
+      if (p.size) setSize.value = p.size;
+      if (p.spacing) setSpacing.value = p.spacing;
+      if (typeof p.keyboard === 'boolean') setKeyboard.checked = p.keyboard;
+      if (typeof p.strict === 'boolean') setStrict.checked = p.strict;
+    } catch {}
+  }
+  function savePrefs() {
+    try {
+      localStorage.setItem(
+        'tt-prefs',
+        JSON.stringify({
+          font: setFont.value,
+          size: setSize.value,
+          spacing: setSpacing.value,
+          keyboard: setKeyboard.checked,
+          strict: setStrict.checked,
+        })
+      );
+    } catch {}
+  }
+  function applyPrefs() {
+    textRender.style.fontFamily = setFont.value;
+    textRender.style.fontSize = `${setSize.value}px`;
+    textRender.style.lineHeight = String(Number(setSpacing.value) / 100);
+    $('read-render').style.fontFamily = setFont.value;
+    keyboard.style.display = setKeyboard.checked ? '' : 'none';
+    strict = setStrict.checked;
+    engine.setStrict(strict);
+    savePrefs();
+  }
+  [setFont, setSize, setSpacing, setKeyboard, setStrict].forEach((el) =>
+    el.addEventListener('input', applyPrefs)
+  );
+
+  // --- Boot -----------------------------------------------------------------
+  loadPrefs();
+  buildText();
+  applyPrefs();
+  onUpdate(engine.computeStats());
+  setMode(initialMode);

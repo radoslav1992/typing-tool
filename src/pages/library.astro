@@ -1,0 +1,135 @@
+---
+import Base from '../layouts/Base.astro';
+import { passages } from '../data/books.ts';
+
+const genres = Array.from(new Set(passages.map((p) => p.genre))).sort();
+function readingTime(text: string) {
+  // ~200 wpm reading; rounded up to the nearest minute, min 1.
+  return Math.max(1, Math.round(text.split(/\s+/).length / 200));
+}
+---
+
+<Base title="Library — Typing Tool">
+  <section class="container">
+    <header class="head">
+      <span class="tag">Library</span>
+      <h1>Pick something to type</h1>
+      <p class="lede">
+        A growing shelf of public-domain classics, sized for a single session. Choose typing or
+        reading mode on the next screen. Want your own text? <a href="/upload">Upload it →</a>
+      </p>
+    </header>
+
+    <div class="filters" role="group" aria-label="Filter by genre">
+      <button class="chip active" data-genre="all">All</button>
+      {genres.map((g) => <button class="chip" data-genre={g}>{g}</button>)}
+    </div>
+
+    <div class="grid" id="book-grid">
+      {
+        passages.map((b) => (
+          <article class="card book" data-genre={b.genre}>
+            <div class="book-top">
+              <span class="book-genre">{b.genre}</span>
+              <span class="book-time">{readingTime(b.text)} min</span>
+            </div>
+            <h2 class="book-title">{b.title}</h2>
+            <p class="book-author">
+              {b.author} · {b.year < 0 ? `${Math.abs(b.year)} BCE` : b.year}
+            </p>
+            <p class="book-preview">{b.text.slice(0, 120)}…</p>
+            <div class="book-actions">
+              <a class="btn btn-primary" href={`/practice?book=${b.id}`}>Type</a>
+              <a class="btn btn-ghost" href={`/practice?book=${b.id}&mode=read`}>Read</a>
+            </div>
+          </article>
+        ))
+      }
+    </div>
+  </section>
+</Base>
+
+<style>
+  .head { max-width: 60ch; margin-bottom: 8px; }
+  .head h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); margin-top: 12px; }
+  .lede { color: var(--text-soft); font-size: 1.08rem; }
+
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 24px 0;
+  }
+  .chip {
+    padding: 7px 15px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-soft);
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .chip:hover { background: var(--surface-2); }
+  .chip.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 18px;
+  }
+  .book {
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+  }
+  .book-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .book-genre {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--accent-strong);
+  }
+  .book-time { font-size: 0.8rem; color: var(--text-faint); }
+  .book-title { font-size: 1.25rem; margin: 0; }
+  .book-author { color: var(--text-soft); font-size: 0.9rem; margin: 4px 0 12px; }
+  .book-preview {
+    color: var(--text-soft);
+    font-size: 0.92rem;
+    font-family: var(--font-serif);
+    line-height: 1.6;
+    flex: 1;
+    margin: 0 0 18px;
+  }
+  .book-actions { display: flex; gap: 10px; }
+  .book-actions .btn { padding: 9px 20px; font-size: 0.92rem; }
+
+  .hidden { display: none !important; }
+</style>
+
+<script>
+  const chips = document.querySelectorAll<HTMLButtonElement>('.chip');
+  const books = document.querySelectorAll<HTMLElement>('#book-grid .book');
+  chips.forEach((chip) => {
+    chip.addEventListener('click', () => {
+      chips.forEach((c) => c.classList.remove('active'));
+      chip.classList.add('active');
+      const genre = chip.dataset.genre;
+      books.forEach((b) => {
+        const show = genre === 'all' || b.dataset.genre === genre;
+        b.classList.toggle('hidden', !show);
+      });
+    });
+  });
+</script>

@@ -1,0 +1,72 @@
+---
+const year = new Date().getFullYear();
+---
+
+<footer class="site-footer">
+  <div class="container inner">
+    <div>
+      <span class="brand">Typing<span class="accent">Tool</span></span>
+      <p class="tag-line">Practice typing by retyping the books you love.</p>
+    </div>
+    <nav class="cols" aria-label="Footer">
+      <a href="/library">Library</a>
+      <a href="/practice">Practice</a>
+      <a href="/upload">Upload text</a>
+      <a href="/stats">Your stats</a>
+    </nav>
+  </div>
+  <div class="container note">
+    <span>© {year} TypingTool. Practice texts are works in the public domain.</span>
+    <span>Built with Astro · runs entirely in your browser.</span>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    border-top: 1px solid var(--border);
+    background: var(--bg-soft);
+    padding: 40px 0 28px;
+    color: var(--text-soft);
+  }
+  .inner {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .brand {
+    font-weight: 800;
+    font-size: 1.1rem;
+    color: var(--text);
+    letter-spacing: -0.03em;
+  }
+  .accent { color: var(--accent-strong); }
+  .tag-line {
+    margin: 6px 0 0;
+    font-size: 0.92rem;
+    max-width: 28ch;
+  }
+  .cols {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+  }
+  .cols a {
+    color: var(--text-soft);
+    font-weight: 500;
+    font-size: 0.92rem;
+  }
+  .cols a:hover { color: var(--accent-strong); }
+  .note {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 24px;
+    justify-content: space-between;
+    margin-top: 26px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+    font-size: 0.82rem;
+    color: var(--text-faint);
+  }
+</style>

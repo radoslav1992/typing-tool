@@ -1,0 +1,20 @@
+{
+  "name": "typing-tool",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Practice typing by retyping books — an Astro app deployable on Cloudflare.",
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "deploy": "astro build && wrangler pages deploy dist"
+  },
+  "dependencies": {
+    "astro": "^4.16.18"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0"
+  }
+}

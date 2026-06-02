@@ -1,0 +1,280 @@
+---
+import Base from '../layouts/Base.astro';
+import { passages } from '../data/books.ts';
+
+const featured = passages.slice(0, 3);
+const features = [
+  {
+    icon: '⌨',
+    title: 'Typing mode',
+    body: 'Retype real books character by character. Mistakes are highlighted instantly and your speed updates live.',
+  },
+  {
+    icon: '📖',
+    title: 'Reading mode',
+    body: 'Prefer to just read? Flip any text into a clean, distraction-free reading view with adjustable type.',
+  },
+  {
+    icon: '⬆',
+    title: 'Custom uploads',
+    body: 'Paste or upload your own text — notes, articles, a chapter you love — and practice on what matters to you.',
+  },
+  {
+    icon: '📊',
+    title: 'Progress tracking',
+    body: 'Every session is saved locally. Watch your words-per-minute and accuracy climb over time.',
+  },
+  {
+    icon: '🎹',
+    title: 'On-screen keyboard',
+    body: 'An optional keyboard highlights the next key to press — perfect for building touch-typing muscle memory.',
+  },
+  {
+    icon: '🎨',
+    title: 'Make it yours',
+    body: 'Light and dark paper themes, serif or mono fonts, and adjustable size and spacing for comfortable practice.',
+  },
+];
+---
+
+<Base>
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container hero-grid">
+      <div class="hero-copy">
+        <span class="tag">Type · Read · Improve</span>
+        <h1>Practice typing by retyping the books you love.</h1>
+        <p class="lede">
+          Turn typing drills into something worth doing. Retype classic literature, watch your speed
+          and accuracy climb, and read along the way — all free, all in your browser.
+        </p>
+        <div class="cta">
+          <a class="btn btn-primary" href="/library">Browse the library →</a>
+          <a class="btn btn-ghost" href="/practice">Start a quick session</a>
+        </div>
+        <p class="micro">No account needed · Your progress stays on your device</p>
+      </div>
+
+      <div class="hero-demo card" aria-hidden="true">
+        <div class="demo-head">
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          <span class="demo-title">Pride and Prejudice</span>
+        </div>
+        <p class="demo-text">
+          <span class="d-correct">It is a truth universally</span>
+          <span class="d-current">a</span><span class="d-pending">cknowledged, that a single man…</span>
+        </p>
+        <div class="demo-stats">
+          <span><strong>68</strong> wpm</span>
+          <span><strong>98.4%</strong> acc</span>
+          <span><strong>0:42</strong> time</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="container section">
+    <h2 class="section-title">Everything you need to get faster</h2>
+    <div class="feature-grid">
+      {
+        features.map((f) => (
+          <div class="card feature">
+            <div class="feature-icon" aria-hidden="true">{f.icon}</div>
+            <h3>{f.title}</h3>
+            <p>{f.body}</p>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <!-- Featured books -->
+  <section class="container section">
+    <div class="row-head">
+      <h2 class="section-title">Start with a classic</h2>
+      <a class="see-all" href="/library">See the whole library →</a>
+    </div>
+    <div class="book-row">
+      {
+        featured.map((b) => (
+          <a class="card book" href={`/practice?book=${b.id}`}>
+            <span class="book-genre">{b.genre}</span>
+            <h3 class="book-title">{b.title}</h3>
+            <p class="book-author">{b.author} · {b.year < 0 ? `${Math.abs(b.year)} BCE` : b.year}</p>
+            <span class="book-cta">Type this →</span>
+          </a>
+        ))
+      }
+    </div>
+  </section>
+
+  <!-- Closing CTA -->
+  <section class="container">
+    <div class="card closing">
+      <h2>Ready to find your pace?</h2>
+      <p>Pick a book, start typing, and let your words-per-minute do the talking.</p>
+      <a class="btn btn-primary" href="/library">Get started — it's free</a>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .hero {
+    padding: 28px 0 12px;
+  }
+  .hero-grid {
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 48px;
+    align-items: center;
+  }
+  .hero-copy h1 {
+    font-size: clamp(2.1rem, 5vw, 3.4rem);
+    margin-top: 16px;
+  }
+  .lede {
+    font-size: 1.15rem;
+    color: var(--text-soft);
+    max-width: 46ch;
+  }
+  .cta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin: 26px 0 12px;
+  }
+  .micro {
+    font-size: 0.85rem;
+    color: var(--text-faint);
+  }
+
+  .hero-demo {
+    padding: 18px;
+    font-family: var(--font-mono);
+  }
+  .demo-head {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: var(--surface-2);
+  }
+  .demo-title {
+    margin-left: auto;
+    font-size: 0.8rem;
+    color: var(--text-faint);
+    font-family: var(--font-sans);
+  }
+  .demo-text {
+    font-size: 1.2rem;
+    line-height: 1.9;
+    margin: 18px 0;
+  }
+  .d-correct { color: var(--correct); }
+  .d-pending { color: var(--text-faint); }
+  .d-current {
+    background: var(--accent);
+    color: #fff;
+    border-radius: 3px;
+    padding: 1px 1px;
+  }
+  .demo-stats {
+    display: flex;
+    gap: 18px;
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    color: var(--text-soft);
+  }
+  .demo-stats strong { color: var(--accent-strong); font-size: 1rem; }
+
+  .section { padding: 56px 0 8px; }
+  .section-title {
+    font-size: clamp(1.5rem, 3vw, 2rem);
+  }
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 18px;
+    margin-top: 22px;
+  }
+  .feature {
+    padding: 22px;
+  }
+  .feature-icon {
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border-radius: 11px;
+    background: var(--accent-soft);
+    font-size: 1.3rem;
+    margin-bottom: 12px;
+  }
+  .feature h3 { font-size: 1.1rem; }
+  .feature p { color: var(--text-soft); margin: 0; font-size: 0.96rem; }
+
+  .row-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .see-all { font-weight: 600; }
+  .book-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 18px;
+    margin-top: 22px;
+  }
+  .book {
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    transition: transform 0.1s ease, border-color 0.15s ease;
+  }
+  .book:hover {
+    text-decoration: none;
+    transform: translateY(-3px);
+    border-color: var(--accent);
+  }
+  .book-genre {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--accent-strong);
+  }
+  .book-title { font-size: 1.2rem; margin: 4px 0 0; color: var(--text); }
+  .book-author { color: var(--text-soft); font-size: 0.9rem; margin: 0; }
+  .book-cta {
+    margin-top: 14px;
+    font-weight: 600;
+    color: var(--accent-strong);
+    font-size: 0.92rem;
+  }
+
+  .closing {
+    margin-top: 56px;
+    padding: 48px 32px;
+    text-align: center;
+    background: linear-gradient(135deg, var(--accent-soft), var(--surface));
+  }
+  .closing h2 { font-size: clamp(1.6rem, 3vw, 2.2rem); }
+  .closing p { color: var(--text-soft); max-width: 44ch; margin: 0 auto 24px; }
+
+  @media (max-width: 860px) {
+    .hero-grid { grid-template-columns: 1fr; gap: 32px; }
+    .hero-demo { order: 2; }
+  }
+</style>

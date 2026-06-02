@@ -1,0 +1,198 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="Upload text — Typing Tool">
+  <section class="container narrow">
+    <header class="head">
+      <span class="tag">Custom text</span>
+      <h1>Type on your own words</h1>
+      <p class="lede">
+        Paste any text or load a <code>.txt</code> file — notes, an article, a chapter you're
+        studying — and practice on what actually matters to you. It's saved on this device only.
+      </p>
+    </header>
+
+    <form id="upload-form" class="card form">
+      <div class="field">
+        <label for="title">Title</label>
+        <input type="text" id="title" placeholder="e.g. Chapter 1 — my notes" maxlength="120" />
+      </div>
+
+      <div class="field">
+        <div class="label-row">
+          <label for="content">Text</label>
+          <span id="counter" class="counter">0 characters</span>
+        </div>
+        <textarea id="content" rows="10" placeholder="Paste or type your text here…"></textarea>
+      </div>
+
+      <div class="file-row">
+        <label class="btn btn-ghost file-btn">
+          ⬆ Load a .txt file
+          <input type="file" id="file" accept=".txt,text/plain" hidden />
+        </label>
+        <span id="file-name" class="file-name"></span>
+      </div>
+
+      <p id="error" class="error" hidden></p>
+
+      <div class="actions">
+        <button type="submit" class="btn btn-primary">Save &amp; start typing</button>
+        <button type="button" id="clear-btn" class="btn btn-ghost">Clear</button>
+      </div>
+    </form>
+
+    <section class="saved" id="saved-section" hidden>
+      <h2>Your saved texts</h2>
+      <ul class="saved-list" id="saved-list"></ul>
+    </section>
+  </section>
+</Base>
+
+<style>
+  .narrow { max-width: 760px; }
+  .head { margin-bottom: 22px; }
+  .head h1 { font-size: clamp(1.8rem, 4vw, 2.4rem); margin-top: 12px; }
+  .lede { color: var(--text-soft); font-size: 1.05rem; }
+  code {
+    font-family: var(--font-mono);
+    background: var(--surface-2);
+    padding: 1px 6px;
+    border-radius: 5px;
+    font-size: 0.9em;
+  }
+
+  .form { padding: 26px; display: flex; flex-direction: column; gap: 18px; }
+  .field { display: flex; flex-direction: column; gap: 7px; }
+  .label-row { display: flex; justify-content: space-between; align-items: baseline; }
+  label { font-weight: 600; font-size: 0.92rem; }
+  .counter { font-size: 0.82rem; color: var(--text-faint); }
+  input[type='text'], textarea {
+    width: 100%;
+    padding: 11px 13px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--bg-soft);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 1rem;
+    resize: vertical;
+  }
+  textarea { font-family: var(--font-mono); line-height: 1.7; }
+  input:focus, textarea:focus { outline: none; border-color: var(--accent); }
+
+  .file-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .file-btn { cursor: pointer; }
+  .file-name { font-size: 0.88rem; color: var(--text-soft); }
+  .error { color: var(--error); font-size: 0.9rem; margin: 0; }
+  .actions { display: flex; gap: 10px; }
+
+  .saved { margin-top: 36px; }
+  .saved-list { list-style: none; padding: 0; margin: 16px 0 0; display: flex; flex-direction: column; gap: 10px; }
+  .saved-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+  }
+  .saved-meta { flex: 1; min-width: 0; }
+  .saved-title { font-weight: 700; }
+  .saved-sub { font-size: 0.82rem; color: var(--text-faint); }
+  .saved-actions { display: flex; gap: 8px; }
+  .mini { padding: 7px 14px; font-size: 0.85rem; }
+  .del { color: var(--error); border-color: var(--border); }
+</style>
+
+<script>
+  import { saveCustomText, loadCustomTexts, deleteCustomText, type CustomText } from '../scripts/stats.ts';
+
+  const $ = (id: string) => document.getElementById(id)!;
+  const titleEl = $('title') as HTMLInputElement;
+  const contentEl = $('content') as HTMLTextAreaElement;
+  const counter = $('counter');
+  const errorEl = $('error');
+  const fileInput = $('file') as HTMLInputElement;
+  const fileName = $('file-name');
+
+  function updateCounter() {
+    counter.textContent = `${contentEl.value.length.toLocaleString()} characters`;
+  }
+  contentEl.addEventListener('input', updateCounter);
+
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+    fileName.textContent = file.name;
+    const text = await file.text();
+    contentEl.value = text;
+    if (!titleEl.value) titleEl.value = file.name.replace(/\.txt$/i, '');
+    updateCounter();
+  });
+
+  $('clear-btn').addEventListener('click', () => {
+    titleEl.value = '';
+    contentEl.value = '';
+    fileName.textContent = '';
+    fileInput.value = '';
+    errorEl.hidden = true;
+    updateCounter();
+  });
+
+  $('upload-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const text = contentEl.value.trim();
+    if (text.length < 10) {
+      errorEl.textContent = 'Please enter at least 10 characters of text to practice with.';
+      errorEl.hidden = false;
+      return;
+    }
+    const saved = saveCustomText(titleEl.value, text);
+    location.href = `/practice?custom=${saved.id}`;
+  });
+
+  // --- Saved list -----------------------------------------------------------
+  function fmtDate(ts: number) {
+    return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  function renderSaved() {
+    const items = loadCustomTexts();
+    const section = $('saved-section');
+    const list = $('saved-list');
+    if (items.length === 0) {
+      section.hidden = true;
+      return;
+    }
+    section.hidden = false;
+    list.innerHTML = '';
+    items.forEach((c: CustomText) => {
+      const li = document.createElement('li');
+      li.className = 'saved-item';
+      li.innerHTML = `
+        <div class="saved-meta">
+          <div class="saved-title"></div>
+          <div class="saved-sub"></div>
+        </div>
+        <div class="saved-actions">
+          <a class="btn btn-primary mini" href="/practice?custom=${c.id}">Type</a>
+          <button class="btn btn-ghost mini del" data-id="${c.id}">Delete</button>
+        </div>`;
+      (li.querySelector('.saved-title') as HTMLElement).textContent = c.title;
+      (li.querySelector('.saved-sub') as HTMLElement).textContent =
+        `${c.text.length.toLocaleString()} characters · added ${fmtDate(c.date)}`;
+      list.appendChild(li);
+    });
+    list.querySelectorAll<HTMLButtonElement>('.del').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        deleteCustomText(btn.dataset.id!);
+        renderSaved();
+      });
+    });
+  }
+
+  updateCounter();
+  renderSaved();
+</script>
