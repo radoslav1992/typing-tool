@@ -9,7 +9,7 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "deploy": "astro build && wrangler pages deploy dist"
+    "deploy": "astro build && wrangler deploy"
   },
   "dependencies": {
     "astro": "^4.16.18"

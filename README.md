@@ -61,22 +61,33 @@ npm run build        # outputs static site to ./dist
 npm run preview      # preview the production build
 ```
 
-## Deploy to Cloudflare Pages
+## Deploy to Cloudflare
 
-**Option A — Git integration (recommended).** Connect this repo in the
-Cloudflare dashboard → Workers & Pages → Create → Pages, with:
+This deploys as a **Worker that serves the static build** (Cloudflare's
+"static assets" model). `wrangler.toml` points `[assets].directory` at `./dist`,
+so `wrangler deploy` uploads the built site — no server code runs.
+
+**Option A — Git integration (recommended).** Connect the repo in the
+Cloudflare dashboard → Workers & Pages → Create → Workers → connect to Git:
 
 - **Build command:** `npm run build`
-- **Build output directory:** `dist`
+- **Deploy command:** `npx wrangler deploy` (the default)
 
-`wrangler.toml` already sets `pages_build_output_dir = "dist"`.
+Cloudflare runs the build and then `wrangler deploy`, which reads
+`wrangler.toml` and publishes `./dist`.
 
 **Option B — direct upload with Wrangler:**
 
 ```bash
 npm run build
-npx wrangler pages deploy dist        # or: npm run deploy
+npx wrangler deploy        # or: npm run deploy
 ```
+
+> Deploying as a **Pages** project instead? Use
+> `npx wrangler pages deploy dist` and remove the `[assets]` block from
+> `wrangler.toml` (Pages uses `pages_build_output_dir = "dist"`). Mixing the
+> Pages config with the `wrangler deploy` command is what caused the
+> "Workers-specific command in a Pages project" error.
 
 The site is fully static, so it serves from Cloudflare's edge with no
 functions or runtime configuration required.

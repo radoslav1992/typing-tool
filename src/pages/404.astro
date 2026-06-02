@@ -1,0 +1,36 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="Page not found — Typing Tool">
+  <section class="container notfound">
+    <span class="big" aria-hidden="true">⌨</span>
+    <h1>404 — nothing to type here</h1>
+    <p>That page wandered off. Let's get you back to the keys.</p>
+    <div class="actions">
+      <a class="btn btn-primary" href="/library">Browse the library</a>
+      <a class="btn btn-ghost" href="/">Go home</a>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .notfound {
+    text-align: center;
+    padding: 64px 0 48px;
+    max-width: 48ch;
+  }
+  .big {
+    display: inline-grid;
+    place-items: center;
+    width: 72px;
+    height: 72px;
+    border-radius: 18px;
+    background: var(--accent-soft);
+    font-size: 2rem;
+    margin-bottom: 18px;
+  }
+  .notfound h1 { font-size: clamp(1.6rem, 4vw, 2.2rem); }
+  .notfound p { color: var(--text-soft); font-size: 1.05rem; }
+  .actions { display: flex; gap: 10px; justify-content: center; margin-top: 22px; flex-wrap: wrap; }
+</style>
