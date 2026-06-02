@@ -48,6 +48,14 @@
   box-sizing: border-box;
 }
 
+/* The `hidden` attribute must always win, even when an element's class sets
+   a `display` value (e.g. the results overlay or settings panel). Without
+   this, `[hidden]` (a UA rule) is overridden by class selectors of equal
+   specificity that appear later, leaving "hidden" panels visible. */
+[hidden] {
+  display: none !important;
+}
+
 html {
   scroll-behavior: smooth;
 }
