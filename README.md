@@ -6,6 +6,31 @@ runs entirely in the browser and deploys to **Cloudflare Pages**.
 > Inspired by the "type along to a book" idea — built from scratch as an
 > independent, open implementation. Practice texts are works in the public domain.
 
+## The book library
+
+Whole public-domain books ship as **static text** — no backend, no database.
+A book is just a `.txt` file under `public/books/`; the browser fetches one on
+demand and the app splits it into ordered, bite-size **passages** for typing,
+remembering where you left off (resume per book).
+
+Books are populated by a small script that downloads them from
+[Project Gutenberg](https://www.gutenberg.org), strips the license boilerplate,
+and writes a metadata manifest:
+
+```bash
+npm run fetch-books     # downloads the curated list into public/books/
+```
+
+This also runs automatically as a `prebuild` step, so a normal
+`npm run build` (locally or on Cloudflare, which has network) populates the
+full library. It **fails soft** — if a download is unavailable the build still
+succeeds with whatever is present, falling back to the built-in warm-up
+passages. Edit `scripts/books.config.json` to add or remove titles (each entry
+just needs a Project Gutenberg id).
+
+> Only public-domain works are fetched, and the texts are downloaded at build
+> time rather than committed, keeping the repo small.
+
 ## Features
 
 - **Typing mode** — retype real passages, with live per-character feedback

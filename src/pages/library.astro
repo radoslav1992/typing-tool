@@ -1,11 +1,16 @@
 ---
 import Base from '../layouts/Base.astro';
-import { passages } from '../data/books.ts';
+import { books, genres, hasFullBooks } from '../data/library.ts';
+import { estimatePassages } from '../scripts/chunk.ts';
 
-const genres = Array.from(new Set(passages.map((p) => p.genre))).sort();
-function readingTime(text: string) {
-  // ~200 wpm reading; rounded up to the nearest minute, min 1.
-  return Math.max(1, Math.round(text.split(/\s+/).length / 200));
+function readingTime(chars: number) {
+  // ~5 chars/word, ~200 wpm reading; min 1 minute.
+  return Math.max(1, Math.round(chars / 5 / 200));
+}
+function sizeLabel(chars: number, kind: string) {
+  if (kind === 'warmup') return 'Warm-up';
+  const passages = estimatePassages(chars);
+  return `~${passages.toLocaleString()} passages`;
 }
 ---
 
@@ -15,10 +20,20 @@ function readingTime(text: string) {
       <span class="tag">Library</span>
       <h1>Pick something to type</h1>
       <p class="lede">
-        A growing shelf of public-domain classics, sized for a single session. Choose typing or
-        reading mode on the next screen. Want your own text? <a href="/upload">Upload it →</a>
+        Whole public-domain books, split into bite-size passages — your place is saved as you go.
+        Want your own text? <a href="/upload">Upload it →</a>
       </p>
     </header>
+
+    {
+      !hasFullBooks && (
+        <div class="card notice">
+          <strong>Full books load on deploy.</strong> The complete library is fetched from Project
+          Gutenberg at build time (run <code>npm run fetch-books</code> locally, or just deploy).
+          Until then, the warm-up passages below are ready to type.
+        </div>
+      )
+    }
 
     <div class="filters" role="group" aria-label="Filter by genre">
       <button class="chip active" data-genre="all">All</button>
@@ -27,19 +42,25 @@ function readingTime(text: string) {
 
     <div class="grid" id="book-grid">
       {
-        passages.map((b) => (
-          <article class="card book" data-genre={b.genre}>
+        books.map((b) => (
+          <article class="card book" data-genre={b.genre} data-id={b.id} data-kind={b.kind}>
             <div class="book-top">
               <span class="book-genre">{b.genre}</span>
-              <span class="book-time">{readingTime(b.text)} min</span>
+              <span class="book-time">{sizeLabel(b.chars, b.kind)}</span>
             </div>
             <h2 class="book-title">{b.title}</h2>
             <p class="book-author">
               {b.author} · {b.year < 0 ? `${Math.abs(b.year)} BCE` : b.year}
             </p>
-            <p class="book-preview">{b.text.slice(0, 120)}…</p>
+            <p class="book-sub">
+              {readingTime(b.chars)} min read · {b.chars.toLocaleString()} characters
+            </p>
+            <div class="book-progress-wrap" data-progress hidden>
+              <div class="bp-track"><div class="bp-fill"></div></div>
+              <span class="bp-label"></span>
+            </div>
             <div class="book-actions">
-              <a class="btn btn-primary" href={`/practice?book=${b.id}`}>Type</a>
+              <a class="btn btn-primary type-link" href={`/practice?book=${b.id}`}>Type</a>
               <a class="btn btn-ghost" href={`/practice?book=${b.id}&mode=read`}>Read</a>
             </div>
           </article>
@@ -50,16 +71,27 @@ function readingTime(text: string) {
 </Base>
 
 <style>
-  .head { max-width: 60ch; margin-bottom: 8px; }
+  .head { max-width: 62ch; margin-bottom: 8px; }
   .head h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); margin-top: 12px; }
   .lede { color: var(--text-soft); font-size: 1.08rem; }
 
-  .filters {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin: 24px 0;
+  .notice {
+    padding: 14px 18px;
+    margin: 18px 0 4px;
+    font-size: 0.92rem;
+    color: var(--text-soft);
+    background: var(--accent-soft);
+    border-color: transparent;
   }
+  .notice code {
+    font-family: var(--font-mono);
+    background: var(--surface);
+    padding: 1px 6px;
+    border-radius: 5px;
+    font-size: 0.88em;
+  }
+
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 24px 0; }
   .chip {
     padding: 7px 15px;
     border-radius: 999px;
@@ -72,28 +104,15 @@ function readingTime(text: string) {
     font-family: inherit;
   }
   .chip:hover { background: var(--surface-2); }
-  .chip.active {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #fff;
-  }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 18px;
   }
-  .book {
-    padding: 22px;
-    display: flex;
-    flex-direction: column;
-  }
-  .book-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
-  }
+  .book { padding: 22px; display: flex; flex-direction: column; }
+  .book-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
   .book-genre {
     font-size: 0.72rem;
     font-weight: 700;
@@ -103,15 +122,14 @@ function readingTime(text: string) {
   }
   .book-time { font-size: 0.8rem; color: var(--text-faint); }
   .book-title { font-size: 1.25rem; margin: 0; }
-  .book-author { color: var(--text-soft); font-size: 0.9rem; margin: 4px 0 12px; }
-  .book-preview {
-    color: var(--text-soft);
-    font-size: 0.92rem;
-    font-family: var(--font-serif);
-    line-height: 1.6;
-    flex: 1;
-    margin: 0 0 18px;
-  }
+  .book-author { color: var(--text-soft); font-size: 0.92rem; margin: 4px 0 2px; }
+  .book-sub { color: var(--text-faint); font-size: 0.82rem; margin: 0 0 16px; flex: 1; }
+
+  .book-progress-wrap { margin: 0 0 16px; display: flex; flex-direction: column; gap: 5px; }
+  .bp-track { height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+  .bp-fill { height: 100%; width: 0%; background: var(--accent); }
+  .bp-label { font-size: 0.76rem; color: var(--accent-strong); font-weight: 600; }
+
   .book-actions { display: flex; gap: 10px; }
   .book-actions .btn { padding: 9px 20px; font-size: 0.92rem; }
 
@@ -119,17 +137,36 @@ function readingTime(text: string) {
 </style>
 
 <script>
+  import { loadBookProgress } from '../scripts/stats.ts';
+
+  // Genre filter
   const chips = document.querySelectorAll<HTMLButtonElement>('.chip');
-  const books = document.querySelectorAll<HTMLElement>('#book-grid .book');
+  const cards = document.querySelectorAll<HTMLElement>('#book-grid .book');
   chips.forEach((chip) => {
     chip.addEventListener('click', () => {
       chips.forEach((c) => c.classList.remove('active'));
       chip.classList.add('active');
       const genre = chip.dataset.genre;
-      books.forEach((b) => {
-        const show = genre === 'all' || b.dataset.genre === genre;
-        b.classList.toggle('hidden', !show);
+      cards.forEach((c) => {
+        const show = genre === 'all' || c.dataset.genre === genre;
+        c.classList.toggle('hidden', !show);
       });
     });
+  });
+
+  // Per-book resume progress
+  cards.forEach((card) => {
+    const id = card.dataset.id!;
+    const saved = loadBookProgress(`book:${id}`);
+    if (!saved || saved.total <= 1 || saved.index <= 0) return;
+    const wrap = card.querySelector<HTMLElement>('[data-progress]')!;
+    const fill = card.querySelector<HTMLElement>('.bp-fill')!;
+    const label = card.querySelector<HTMLElement>('.bp-label')!;
+    const pct = Math.round((saved.index / Math.max(1, saved.total - 1)) * 100);
+    fill.style.width = `${pct}%`;
+    label.textContent = `Resume — passage ${saved.index + 1} of ${saved.total}`;
+    wrap.hidden = false;
+    const typeLink = card.querySelector<HTMLAnchorElement>('.type-link')!;
+    typeLink.textContent = 'Continue';
   });
 </script>

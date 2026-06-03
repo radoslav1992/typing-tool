@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",
+    "fetch-books": "node scripts/fetch-books.mjs",
+    "prebuild": "node scripts/fetch-books.mjs",
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",

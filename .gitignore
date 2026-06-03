@@ -2,6 +2,9 @@
 dist/
 .output/
 
+# fetched book texts — regenerated at build time by scripts/fetch-books.mjs
+public/books/*.txt
+
 # dependencies
 node_modules/
 
