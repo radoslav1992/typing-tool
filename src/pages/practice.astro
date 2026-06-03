@@ -76,6 +76,16 @@ function keySize(key: string): string {
       <div class="progress" aria-hidden="true"><div class="progress-fill" id="progress-fill"></div></div>
     </div>
 
+    <!-- Passage navigation (whole books) -->
+    <div id="passage-bar" class="passage-bar" hidden>
+      <button id="prev-passage" class="nav-btn" aria-label="Previous passage">‹ Prev</button>
+      <div class="passage-meta">
+        <span id="passage-label">Passage 1 of 1</span>
+        <div class="book-progress" aria-hidden="true"><div id="book-progress-fill"></div></div>
+      </div>
+      <button id="next-passage" class="nav-btn" aria-label="Next passage">Next ›</button>
+    </div>
+
     <!-- Typing surface -->
     <div id="type-view">
       <div
@@ -128,7 +138,8 @@ function keySize(key: string): string {
         </div>
         <p id="r-note" class="r-note"></p>
         <div class="results-actions">
-          <button class="btn btn-primary" id="r-again">Type it again</button>
+          <button class="btn btn-primary" id="r-next" hidden>Next passage →</button>
+          <button class="btn btn-ghost" id="r-again">Type it again</button>
           <a class="btn btn-ghost" href="/library">Pick another</a>
           <a class="btn btn-ghost" href="/stats">View stats</a>
         </div>
@@ -234,6 +245,36 @@ function keySize(key: string): string {
     min-width: 80px;
   }
   .progress-fill { height: 100%; width: 0%; background: var(--accent); transition: width 0.15s ease; }
+
+  .passage-bar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+  .nav-btn {
+    flex: none;
+    padding: 9px 16px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .nav-btn:hover:not(:disabled) { background: var(--surface-2); }
+  .nav-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .passage-meta { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+  #passage-label { font-size: 0.85rem; color: var(--text-soft); font-weight: 600; text-align: center; }
+  .book-progress {
+    height: 6px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    overflow: hidden;
+  }
+  #book-progress-fill { height: 100%; width: 0%; background: var(--accent-strong); transition: width 0.2s ease; }
 
   .text-area {
     position: relative;
@@ -378,46 +419,29 @@ function keySize(key: string): string {
 <script>
   import { TypingEngine, type LiveStats } from '../scripts/typing-engine.ts';
   import { keyForChar } from '../scripts/keyboard.ts';
-  import { getPassage } from '../data/books.ts';
-  import { saveResult, getCustomText } from '../scripts/stats.ts';
+  import { getBook } from '../data/library.ts';
+  import { chunkText } from '../scripts/chunk.ts';
+  import {
+    saveResult,
+    getCustomText,
+    loadBookProgress,
+    saveBookProgress,
+  } from '../scripts/stats.ts';
 
-  // --- Resolve the source text from the URL ---------------------------------
+  // --- URL parameters -------------------------------------------------------
   const params = new URLSearchParams(location.search);
   const bookId = params.get('book');
   const customId = params.get('custom');
+  const iParam = params.get('i');
   const initialMode = params.get('mode') === 'read' ? 'read' : 'type';
 
-  let sourceTitle = 'Quick practice';
-  let sourceMeta = '';
-  let text =
+  const DEFAULT_TEXT =
     'The quick brown fox jumps over the lazy dog. Pack my box with five dozen liquor jugs. ' +
     'How vexingly quick daft zebras jump! The five boxing wizards jump quickly.';
 
-  if (bookId) {
-    const p = getPassage(bookId);
-    if (p) {
-      text = p.text;
-      sourceTitle = p.title;
-      sourceMeta = `${p.author} · ${p.year < 0 ? Math.abs(p.year) + ' BCE' : p.year} · ${p.genre}`;
-    }
-  } else if (customId) {
-    const c = getCustomText(customId);
-    if (c) {
-      text = c.text;
-      sourceTitle = c.title;
-      sourceMeta = 'Your uploaded text';
-    } else {
-      sourceTitle = 'Text not found';
-      sourceMeta = 'This custom text is no longer saved on this device.';
-    }
-  }
+  const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
   // --- DOM refs -------------------------------------------------------------
-  const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-  $('source-title').textContent = sourceTitle;
-  $('source-meta').textContent = sourceMeta;
-  $('read-render').textContent = text;
-
   const textArea = $('text-area');
   const textRender = $('text-render');
   const stWpm = $('st-wpm');
@@ -425,6 +449,23 @@ function keySize(key: string): string {
   const stTime = $('st-time');
   const stErr = $('st-err');
   const progressFill = $('progress-fill');
+  const keyboard = $('keyboard');
+  const passageBar = $('passage-bar');
+  const passageLabel = $('passage-label');
+  const bookProgressFill = $('book-progress-fill');
+  const prevBtn = $<HTMLButtonElement>('prev-passage');
+  const nextBtn = $<HTMLButtonElement>('next-passage');
+  const rNext = $<HTMLButtonElement>('r-next');
+
+  // --- Source state ---------------------------------------------------------
+  let sourceTitle = 'Quick practice';
+  let sourceMeta = '';
+  let fullText = '';
+  let chunks: string[] = [''];
+  let index = 0;
+  let progressKey: string | null = null;
+
+  const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 
   function fmtTime(sec: number): string {
     const m = Math.floor(sec / 60);
@@ -432,7 +473,7 @@ function keySize(key: string): string {
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
 
-  // --- Build character spans ------------------------------------------------
+  // --- Character rendering --------------------------------------------------
   let charEls: HTMLSpanElement[] = [];
   function buildText() {
     textRender.innerHTML = '';
@@ -459,14 +500,15 @@ function keySize(key: string): string {
       const base = charEls[i].classList.contains('is-space') ? 'ch is-space ' : 'ch ';
       charEls[i].className = base + STATE_CLASS[states[i]];
     }
-    // keep the caret in view
     const cur = charEls[engine.position];
     if (cur) cur.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     highlightNextKey();
   }
 
   // --- On-screen keyboard ---------------------------------------------------
-  const keyboard = $('keyboard');
+  function cssEscape(s: string): string {
+    return s.replace(/["\\]/g, '\\$&');
+  }
   function clearKeyHighlights() {
     keyboard.querySelectorAll('.key.next, .key.next-shift').forEach((el) => {
       el.classList.remove('next', 'next-shift');
@@ -484,9 +526,6 @@ function keySize(key: string): string {
       keyboard.querySelectorAll('.key[data-key="shift"]').forEach((el) => el.classList.add('next-shift'));
     }
   }
-  function cssEscape(s: string): string {
-    return s.replace(/["\\]/g, '\\$&');
-  }
   function flashKey(key: string) {
     const el = keyboard.querySelector(`.key[data-key="${cssEscape(key.toLowerCase())}"]`);
     if (!el) return;
@@ -494,7 +533,7 @@ function keySize(key: string): string {
     setTimeout(() => el.classList.remove('pressed'), 90);
   }
 
-  // --- Engine ---------------------------------------------------------------
+  // --- Engine & metrics -----------------------------------------------------
   let strict = false;
   let timer: number | undefined;
 
@@ -509,8 +548,9 @@ function keySize(key: string): string {
 
   function onComplete(s: LiveStats) {
     stopTimer();
+    const suffix = chunks.length > 1 ? ` — passage ${index + 1}/${chunks.length}` : '';
     saveResult({
-      source: sourceTitle,
+      source: sourceTitle + suffix,
       wpm: s.wpm,
       rawWpm: s.rawWpm,
       accuracy: s.accuracy,
@@ -518,10 +558,12 @@ function keySize(key: string): string {
       errors: s.errors,
       durationSec: Math.round(s.elapsed),
     });
+    if (progressKey) saveBookProgress(progressKey, Math.min(index + 1, chunks.length - 1), chunks.length);
     showResults(s);
   }
 
-  let engine = new TypingEngine(text, { onUpdate, onComplete, strict });
+  // Placeholder until the source resolves; replaced by setPassage().
+  let engine = new TypingEngine('', { onUpdate, onComplete, strict });
 
   function startTimer() {
     stopTimer();
@@ -538,10 +580,33 @@ function keySize(key: string): string {
     timer = undefined;
   }
 
+  // --- Passage navigation ---------------------------------------------------
+  function updatePassageBar() {
+    passageBar.hidden = chunks.length <= 1;
+    passageLabel.textContent = `Passage ${index + 1} of ${chunks.length}`;
+    prevBtn.disabled = index <= 0;
+    nextBtn.disabled = index >= chunks.length - 1;
+    const frac = chunks.length > 1 ? index / (chunks.length - 1) : 1;
+    bookProgressFill.style.width = `${Math.round(frac * 100)}%`;
+  }
+
+  function setPassage(i: number, silent = false) {
+    index = clamp(i, 0, chunks.length - 1);
+    stopTimer();
+    engine = new TypingEngine(chunks[index], { onUpdate, onComplete, strict });
+    buildText();
+    onUpdate(engine.computeStats());
+    $('results').hidden = true;
+    updatePassageBar();
+    if (progressKey && !silent) saveBookProgress(progressKey, index, chunks.length);
+    activate();
+  }
+
+  prevBtn.addEventListener('click', () => setPassage(index - 1));
+  nextBtn.addEventListener('click', () => setPassage(index + 1));
+
   // --- Input capture --------------------------------------------------------
-  let active = false;
   function activate() {
-    active = true;
     textArea.classList.add('active');
     textArea.focus();
   }
@@ -566,7 +631,6 @@ function keySize(key: string): string {
       return;
     }
     if (e.key === 'Tab') {
-      // allow tabbing away; only intercept if the text needs a tab
       if (engine.nextChar() === '\t') {
         e.preventDefault();
         engine.handleChar('\t');
@@ -591,6 +655,7 @@ function keySize(key: string): string {
     readView.hidden = !reading;
     typeView.hidden = reading;
     $('stats-bar').style.display = reading ? 'none' : '';
+    passageBar.style.display = reading ? 'none' : '';
     modeRead.classList.toggle('active', reading);
     modeType.classList.toggle('active', !reading);
     if (!reading) activate();
@@ -598,20 +663,9 @@ function keySize(key: string): string {
   modeType.addEventListener('click', () => setMode('type'));
   modeRead.addEventListener('click', () => setMode('read'));
 
-  // --- Restart --------------------------------------------------------------
-  function restart() {
-    stopTimer();
-    engine = new TypingEngine(text, { onUpdate, onComplete, strict });
-    buildText();
-    onUpdate(engine.computeStats());
-    $('results').hidden = true;
-    activate();
-  }
-  $('restart-btn').addEventListener('click', restart);
-  $('r-again').addEventListener('click', restart);
-
   // --- Results --------------------------------------------------------------
   function noteFor(s: LiveStats): string {
+    if (index >= chunks.length - 1 && chunks.length > 1) return 'That was the final passage — you finished the book! 🎉';
     if (s.accuracy >= 99 && s.wpm >= 60) return 'Fast and clean — that was excellent.';
     if (s.accuracy >= 98) return 'Great accuracy. Push the pace next time.';
     if (s.accuracy < 92) return 'Slow down a touch and aim for cleaner keystrokes.';
@@ -625,13 +679,16 @@ function keySize(key: string): string {
     $('r-err').textContent = String(s.errors);
     $('r-chars').textContent = String(engine.target.length);
     $('r-note').textContent = noteFor(s);
+    rNext.hidden = index >= chunks.length - 1;
     $('results').hidden = false;
   }
+  rNext.addEventListener('click', () => setPassage(index + 1));
+  $('r-again').addEventListener('click', () => setPassage(index));
+  $('restart-btn').addEventListener('click', () => setPassage(index));
 
   // --- Settings -------------------------------------------------------------
-  const settingsBtn = $('settings-btn');
   const settingsPanel = $('settings-panel');
-  settingsBtn.addEventListener('click', () => {
+  $('settings-btn').addEventListener('click', () => {
     settingsPanel.hidden = !settingsPanel.hidden;
   });
 
@@ -641,7 +698,6 @@ function keySize(key: string): string {
   const setKeyboard = $<HTMLInputElement>('set-keyboard');
   const setStrict = $<HTMLInputElement>('set-strict');
 
-  // load saved prefs
   type Prefs = { font: string; size: string; spacing: string; keyboard: boolean; strict: boolean };
   function loadPrefs() {
     try {
@@ -683,9 +739,79 @@ function keySize(key: string): string {
     el.addEventListener('input', applyPrefs)
   );
 
-  // --- Boot -----------------------------------------------------------------
-  loadPrefs();
-  buildText();
-  applyPrefs();
-  onUpdate(engine.computeStats());
-  setMode(initialMode);
+  // --- Resolve source & boot ------------------------------------------------
+  async function resolveSource(): Promise<void> {
+    if (bookId) {
+      const b = getBook(bookId);
+      if (!b) {
+        sourceTitle = 'Book not found';
+        sourceMeta = 'This title isn’t in the library yet.';
+        fullText = '';
+        chunks = [''];
+        return;
+      }
+      sourceTitle = b.title;
+      sourceMeta = `${b.author} · ${b.year < 0 ? Math.abs(b.year) + ' BCE' : b.year} · ${b.genre}`;
+      progressKey = `book:${b.id}`;
+      if (b.text != null) {
+        fullText = b.text;
+      } else if (b.file) {
+        try {
+          const res = await fetch(b.file);
+          if (res.ok) {
+            fullText = await res.text();
+          } else {
+            sourceMeta = 'Could not load this book’s text.';
+          }
+        } catch {
+          sourceMeta = 'Could not load this book’s text.';
+        }
+      }
+      chunks = chunkText(fullText);
+      return;
+    }
+
+    if (customId) {
+      const c = getCustomText(customId);
+      if (c) {
+        sourceTitle = c.title;
+        sourceMeta = 'Your uploaded text';
+        progressKey = `custom:${c.id}`;
+        fullText = c.text;
+        chunks = chunkText(fullText);
+      } else {
+        sourceTitle = 'Text not found';
+        sourceMeta = 'This custom text is no longer saved on this device.';
+        chunks = [''];
+      }
+      return;
+    }
+
+    sourceTitle = 'Quick practice';
+    sourceMeta = 'A few pangrams to warm up your fingers.';
+    fullText = DEFAULT_TEXT;
+    chunks = chunkText(DEFAULT_TEXT);
+  }
+
+  (async function init() {
+    loadPrefs();
+    await resolveSource();
+    if (chunks.length === 0) chunks = [''];
+
+    $('source-title').textContent = sourceTitle;
+    $('source-meta').textContent = sourceMeta;
+    $('read-render').textContent = fullText;
+
+    let start = 0;
+    if (iParam != null && Number.isFinite(Number(iParam))) {
+      start = Number(iParam);
+    } else if (progressKey) {
+      const saved = loadBookProgress(progressKey);
+      if (saved) start = saved.index;
+    }
+
+    setPassage(clamp(start, 0, chunks.length - 1), true);
+    applyPrefs();
+    setMode(initialMode);
+  })();
+</script>

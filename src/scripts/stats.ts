@@ -86,6 +86,43 @@ export function aggregate(results: SessionResult[]): Aggregate {
   };
 }
 
+// --- Per-book reading position ---------------------------------------------
+// Remembers which passage of a book you're on, so you can resume. Stored as a
+// single map to avoid scattering many localStorage keys.
+
+export interface BookProgress {
+  index: number;
+  total: number;
+  updated: number;
+}
+
+const PROGRESS_KEY = 'tt-progress';
+
+function loadProgressMap(): Record<string, BookProgress> {
+  try {
+    const raw = localStorage.getItem(PROGRESS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export function loadBookProgress(key: string): BookProgress | null {
+  return loadProgressMap()[key] ?? null;
+}
+
+export function saveBookProgress(key: string, index: number, total: number): void {
+  const map = loadProgressMap();
+  map[key] = { index, total, updated: Date.now() };
+  try {
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify(map));
+  } catch {
+    /* ignore */
+  }
+}
+
 // --- Custom uploads ---------------------------------------------------------
 
 export interface CustomText {
